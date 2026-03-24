@@ -1,4 +1,4 @@
-"""
+    """
 Generate placeholder images for missing appliance classes
 """
 import os

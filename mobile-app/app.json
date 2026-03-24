@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Alwin Appliance Detector",
+    "slug": "alwin-appliance-detector",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a1a"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTabletMode": false,
+      "bundleIdentifier": "com.alwin.appliancedetector"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a1a"
+      },
+      "package": "com.alwin.appliancedetector"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "serverUrl": "http://192.168.x.x:8000"
+    }
+  }
+}

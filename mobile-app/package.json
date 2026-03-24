@@ -1,0 +1,26 @@
+{
+  "name": "alwin-appliance-detector",
+  "version": "1.0.0",
+  "description": "Real-time Appliance Detection with React Native",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "eject": "expo eject"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-native": "0.73.2",
+    "expo": "^49.0.0",
+    "expo-camera": "^14.1.0",
+    "expo-permissions": "^14.1.0",
+    "axios": "^1.6.0",
+    "react-native-svg": "^13.14.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-native": "^0.73.0"
+  }
+}
