@@ -36,7 +36,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from PIL import Image
@@ -183,3 +183,37 @@ async def get_status():
 @app.get("/health")
 async def health():
     return {"status": "ok", "model_loaded": engine is not None, "esp32_ip": ESP32_IP}
+
+
+@app.post("/detect")
+async def detect_appliance(file: UploadFile):
+    """Detect appliance from uploaded image."""
+    try:
+        if engine is None:
+            raise HTTPException(status_code=503, detail="Model not loaded")
+        
+        # Read image
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        
+        # Run inference
+        result = engine.predict(image)
+        
+        return {
+            "class": result["class"],
+            "confidence": float(result["confidence"]),
+            "all_predictions": {k: float(v) for k, v in result.get("predictions", {}).items()}
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/feedback")
+async def submit_feedback(feedback: dict):
+    """Record user feedback for model improvement."""
+    try:
+        # Log feedback for future model retraining
+        print(f"[FEEDBACK] {feedback}")
+        return {"status": "received"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

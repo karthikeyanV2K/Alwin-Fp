@@ -14,9 +14,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://192.168.x.x:8000'; // Change to your server IP
-
-export default function CameraScreen() {
+export default function CameraScreen({ serverIp }) {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -57,7 +55,7 @@ export default function CameraScreen() {
       });
 
       const response = await axios.post(
-        `${API_BASE_URL}/detect`,
+        `http://${serverIp}/detect`,
         formData,
         {
           headers: {
@@ -102,7 +100,7 @@ export default function CameraScreen() {
     try {
       if (detection && lastPhoto) {
         await axios.post(
-          `${API_BASE_URL}/feedback`,
+          `http://${serverIp}/feedback`,
           {
             predicted_class: detection.class,
             confidence: detection.confidence,
