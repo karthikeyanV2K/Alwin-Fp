@@ -23,6 +23,9 @@ export default function CameraScreen({ serverIp }) {
   const [showModal, setShowModal] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const detectionIntervalRef = useRef(null);
+  const serverBaseUrl = serverIp?.includes(':')
+    ? `http://${serverIp}`
+    : `http://${serverIp}:8000`;
 
   useEffect(() => {
     if (!permission) {
@@ -55,7 +58,7 @@ export default function CameraScreen({ serverIp }) {
       });
 
       const response = await axios.post(
-        `http://${serverIp}/detect`,
+        `${serverBaseUrl}/detect`,
         formData,
         {
           headers: {
@@ -100,7 +103,7 @@ export default function CameraScreen({ serverIp }) {
     try {
       if (detection && lastPhoto) {
         await axios.post(
-          `http://${serverIp}/feedback`,
+          `${serverBaseUrl}/feedback`,
           {
             predicted_class: detection.class,
             confidence: detection.confidence,

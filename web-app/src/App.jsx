@@ -121,10 +121,13 @@ export default function App() {
   });
 
   const handleStartAll = useCallback(async () => {
-    connect();
-    await startCamera();
+    await connect();
+    const cameraStarted = await startCamera();
+    if (!cameraStarted) {
+      return;
+    }
     setCamStarted(true);
-    setTimeout(startStreaming, 600);
+    await startStreaming();
   }, [connect, startCamera, startStreaming]);
 
   const handleStop = useCallback(() => {

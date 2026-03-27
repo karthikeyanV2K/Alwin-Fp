@@ -71,20 +71,33 @@ class ApplianceInference:
         arr = arr.transpose(2, 0, 1)[np.newaxis, ...]        # NCHW
         return arr.astype(np.float32)
 
-    def predict(self, image: Image.Image) -> Tuple[str, float]:
-        """
-        Returns (label, confidence) for the most likely appliance.
-        Returns ("Other", conf) when confidence < threshold.
-        """
+    def predict_with_scores(self, image: Image.Image) -> dict:
+        """Return the top prediction plus per-class probabilities."""
         tensor = self.preprocess(image)
         logits = self.session.run([self.output_name], {self.input_name: tensor})[0]
         probs  = self._softmax(logits[0])
         idx    = int(np.argmax(probs))
         conf   = float(probs[idx])
-        label  = self.class_map.get(idx, "Other")
-        if conf < self.confidence_threshold:
-            label = "Other"
-        return label, conf
+        raw_label = self.class_map.get(idx, "Other")
+        label = raw_label if conf >= self.confidence_threshold else "Other"
+        predictions = {
+            self.class_map.get(i, str(i)): float(prob)
+            for i, prob in enumerate(probs)
+        }
+        return {
+            "class": label,
+            "confidence": conf,
+            "predictions": predictions,
+            "raw_class": raw_label,
+        }
+
+    def predict(self, image: Image.Image) -> Tuple[str, float]:
+        """
+        Returns (label, confidence) for the most likely appliance.
+        Returns ("Other", conf) when confidence < threshold.
+        """
+        result = self.predict_with_scores(image)
+        return result["class"], result["confidence"]
 
     def predict_from_bytes(self, jpeg_bytes: bytes) -> Tuple[str, float]:
         """Convenience method: accepts raw JPEG bytes."""

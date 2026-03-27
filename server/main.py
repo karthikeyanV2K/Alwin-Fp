@@ -48,7 +48,7 @@ from temporal_validator import TemporalValidator
 from esp32_client import ESP32Client
 
 # ── Config ────────────────────────────────────────────────────────────────────
-ESP32_IP   = os.getenv("ESP32_IP",   "192.168.1.100")
+ESP32_IP   = os.getenv("ESP32_IP",   "192.168.29.129")
 MODEL_PATH = os.getenv("MODEL_PATH",
     str(Path(__file__).parent.parent / "model" / "checkpoints" / "mobilevit_appliance.onnx"))
 
@@ -197,7 +197,7 @@ async def detect_appliance(file: UploadFile):
         image = Image.open(io.BytesIO(contents))
         
         # Run inference
-        result = engine.predict(image)
+        result = engine.predict_with_scores(image)
         
         return {
             "class": result["class"],

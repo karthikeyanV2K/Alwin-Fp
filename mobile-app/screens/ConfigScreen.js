@@ -6,20 +6,18 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   SafeAreaView,
-  FlatList,
-  Alert,
   TextInput,
+  Alert,
+  ScrollView,
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Network from 'expo-network';
 
 export default function ConfigScreen({ onConfigured }) {
   const [serverIp, setServerIp] = useState(null);
-  const [detectedServers, setDetectedServers] = useState([]);
-  const [isScanning, setIsScanning] = useState(false);
   const [manualIp, setManualIp] = useState('');
-  const [status, setStatus] = useState('Initializing...');
+  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState('Enter your server IP address');
 
   useEffect(() => {
     initializeConfig();
@@ -29,120 +27,68 @@ export default function ConfigScreen({ onConfigured }) {
     try {
       // Check if we have saved IP
       const savedIp = await AsyncStorage.getItem('SERVER_IP');
-      if (savedIp && await testServerConnection(savedIp)) {
-        setServerIp(savedIp);
-        onConfigured(savedIp);
-        return;
+      if (savedIp) {
+        if (await testConnection(savedIp)) {
+          setServerIp(savedIp);
+          setStatus(`Connected to ${savedIp}`);
+          setTimeout(() => onConfigured(savedIp), 500);
+          return;
+        }
       }
-
-      // Get phone's network info
-      const ipAddress = await Network.getIpAddressAsync();
-      setStatus(`Phone IP: ${ipAddress}\nScanning for server...`);
-
-      // Scan for server on local network
-      scanForServer(ipAddress);
+      setStatus('Enter your server IP (e.g., 192.168.1.100)');
     } catch (error) {
-      console.error('Config init error:', error);
-      setStatus('Failed to get network info. Enter IP manually.');
+      console.error('Config error:', error);
+      setStatus('Enter your server IP');
     }
   };
 
-  const getNetworkPrefix = (ip) => {
-    // From 192.168.1.50 → get 192.168.1
-    return ip.substring(0, ip.lastIndexOf('.'));
+  const normalizeServerHost = (value) => {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    return trimmed.includes(':') ? trimmed : `${trimmed}:8000`;
   };
 
-  const scanForServer = async (phoneIp) => {
-    setIsScanning(true);
-    const networkPrefix = getNetworkPrefix(phoneIp);
-    const found = [];
-
-    // Common server ports
-    const ports = [8000, 5000, 3000];
-
-    // Scan IPs 1-20 on the network
-    const ipsToScan = Array.from({ length: 20 }, (_, i) => `${networkPrefix}.${i + 1}`);
-
-    const promises = [];
-    for (const ip of ipsToScan) {
-      for (const port of ports) {
-        promises.push(
-          testServerConnection(`${ip}:${port}`)
-            .then((isValid) => {
-              if (isValid) {
-                found.push(`${ip}:${port}`);
-              }
-            })
-            .catch(() => {}) // Ignore errors
-        );
-      }
-    }
-
-    // Use Promise.allSettled to wait for all attempts (fast timeout)
-    await Promise.allSettled(promises);
-
-    setIsScanning(false);
-
-    if (found.length > 0) {
-      setDetectedServers(found);
-      setStatus(`Found ${found.length} server(s)`);
-    } else {
-      setStatus('No server found. Enter IP manually.');
-    }
-  };
-
-  const testServerConnection = async (serverUrl) => {
+  const testConnection = async (ip) => {
     try {
-      const fullUrl = `http://${serverUrl}`;
-      const response = await axios.get(`${fullUrl}/health`, {
-        timeout: 2000, // 2 second timeout
-      });
+      const host = normalizeServerHost(ip);
+      const url = `http://${host}/health`;
+      const response = await axios.get(url, { timeout: 3000 });
       return response.status === 200;
     } catch (error) {
       return false;
     }
   };
 
-  const selectServer = async (server) => {
-    try {
-      setStatus(`Testing ${server}...`);
-      const isValid = await testServerConnection(server);
-
-      if (isValid) {
-        await AsyncStorage.setItem('SERVER_IP', server);
-        setServerIp(server);
-        setStatus(`✓ Connected to ${server}`);
-        setTimeout(() => onConfigured(server), 1000);
-      } else {
-        Alert.alert('Error', `Cannot connect to ${server}`);
-      }
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    }
-  };
-
-  const handleManualIp = async () => {
+  const handleConnect = async () => {
     if (!manualIp.trim()) {
       Alert.alert('Error', 'Please enter an IP address');
       return;
     }
 
-    const ip = manualIp.includes(':') ? manualIp : `${manualIp}:8000`;
+    setIsLoading(true);
+    setStatus('Testing connection...');
 
     try {
-      setStatus(`Testing ${ip}...`);
-      const isValid = await testServerConnection(ip);
+      const ip = normalizeServerHost(manualIp);
+      const isConnected = await testConnection(ip);
 
-      if (isValid) {
+      if (isConnected) {
         await AsyncStorage.setItem('SERVER_IP', ip);
         setServerIp(ip);
         setStatus(`✓ Connected to ${ip}`);
-        setTimeout(() => onConfigured(ip), 1000);
+        setTimeout(() => onConfigured(ip), 500);
       } else {
-        Alert.alert('Error', `Cannot connect to ${ip}. Check IP and try again.`);
+        Alert.alert(
+          'Connection Failed',
+          `Cannot connect to ${ip}:8000\n\nMake sure:\n1. Server is running\n2. IP is correct\n3. Same WiFi network`
+        );
+        setStatus('Connection failed. Try again.');
       }
     } catch (error) {
       Alert.alert('Error', error.message);
+      setStatus('Error. Try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -161,76 +107,63 @@ export default function ConfigScreen({ onConfigured }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Server Configuration</Text>
-        <Text style={styles.subtitle}>Auto-detecting server on your network...</Text>
-      </View>
-
-      <View style={styles.statusBox}>
-        <Text style={styles.statusText}>{status}</Text>
-      </View>
-
-      {isScanning && (
-        <View style={styles.scanningBox}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.scanningText}>Scanning network...</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Server Configuration</Text>
+          <Text style={styles.subtitle}>Alwin Appliance Detector</Text>
         </View>
-      )}
 
-      {detectedServers.length > 0 && (
-        <View style={styles.serversSection}>
-          <Text style={styles.sectionTitle}>Detected Servers</Text>
-          <FlatList
-            data={detectedServers}
-            keyExtractor={(item) => item}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.serverItem}
-                onPress={() => selectServer(item)}
-              >
-                <Text style={styles.serverItemText}>🖥️ {item}</Text>
-                <Text style={styles.serverItemPort}>Port 8000</Text>
-              </TouchableOpacity>
-            )}
-            scrollEnabled={false}
+        <View style={styles.statusBox}>
+          <Text style={styles.statusText}>{status}</Text>
+        </View>
+
+        <View style={styles.inputSection}>
+          <Text style={styles.label}>Server IP Address</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="192.168.1.100"
+            placeholderTextColor="#999"
+            value={manualIp}
+            onChangeText={setManualIp}
+            editable={!isLoading}
+            keyboardType="decimal-pad"
           />
+          <Text style={styles.hint}>
+            On your server PC, open PowerShell and run: ipconfig
+          </Text>
         </View>
-      )}
-
-      <View style={styles.divider}>
-        <Text style={styles.dividerText}>Or</Text>
-      </View>
-
-      <View style={styles.manualSection}>
-        <Text style={styles.sectionTitle}>Enter Manually</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="192.168.1.100"
-          placeholderTextColor="#999"
-          value={manualIp}
-          onChangeText={setManualIp}
-          keyboardType="decimal-pad"
-        />
-        <Text style={styles.inputHint}>Enter server IP (e.g., 192.168.1.100)</Text>
 
         <TouchableOpacity
-          style={styles.button}
-          onPress={handleManualIp}
-          disabled={isScanning}
+          style={[styles.button, isLoading && styles.buttonDisabled]}
+          onPress={handleConnect}
+          disabled={isLoading}
         >
-          <Text style={styles.buttonText}>Connect</Text>
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Connect</Text>
+          )}
         </TouchableOpacity>
-      </View>
 
-      <View style={styles.helpSection}>
-        <Text style={styles.helpTitle}>Need help?</Text>
-        <Text style={styles.helpText}>
-          1. On your server PC, open PowerShell{'\n'}
-          2. Run: ipconfig{'\n'}
-          3. Find "IPv4 Address" (e.g., 192.168.1.100){'\n'}
-          4. Enter it above
-        </Text>
-      </View>
+        <View style={styles.helpSection}>
+          <Text style={styles.helpTitle}>How to find your server IP:</Text>
+          <Text style={styles.helpText}>
+            1. On your Windows PC, open PowerShell{'\n'}
+            2. Type: ipconfig{'\n'}
+            3. Look for "IPv4 Address" (e.g., 192.168.1.100){'\n'}
+            4. Enter it above{'\n'}
+            5. Make sure server is running on port 8000
+          </Text>
+        </View>
+
+        <View style={styles.exampleBox}>
+          <Text style={styles.exampleLabel}>Example:</Text>
+          <Text style={styles.exampleText}>192.168.1.100</Text>
+          <TouchableOpacity onPress={() => setManualIp('192.168.1.100')}>
+            <Text style={styles.copyText}>Tap to use example</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -239,11 +172,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a1a',
+  },
+  scrollContent: {
     paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   header: {
-    marginTop: 30,
-    marginBottom: 20,
+    marginBottom: 25,
   },
   title: {
     color: '#fff',
@@ -268,57 +203,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  scanningBox: {
-    alignItems: 'center',
-    paddingVertical: 30,
-    marginBottom: 20,
+  inputSection: {
+    marginBottom: 25,
   },
-  scanningText: {
-    color: '#aaa',
-    marginTop: 10,
-    fontSize: 14,
-  },
-  serversSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
+  label: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 10,
-  },
-  serverItem: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  serverItemText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  serverItemPort: {
-    color: '#007AFF',
-    fontSize: 12,
-  },
-  divider: {
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  dividerText: {
-    color: '#666',
-    fontSize: 14,
-    backgroundColor: '#1a1a1a',
-    paddingHorizontal: 10,
-  },
-  manualSection: {
-    marginBottom: 30,
   },
   input: {
     backgroundColor: '#2a2a2a',
@@ -330,16 +222,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 8,
   },
-  inputHint: {
+  hint: {
     color: '#999',
     fontSize: 12,
-    marginBottom: 15,
+    marginTop: 8,
   },
   button: {
     backgroundColor: '#007AFF',
     borderRadius: 8,
     padding: 15,
     alignItems: 'center',
+    marginBottom: 25,
+  },
+  buttonDisabled: {
+    backgroundColor: '#0052CC',
   },
   buttonText: {
     color: '#fff',
@@ -362,6 +258,30 @@ const styles = StyleSheet.create({
     color: '#aaa',
     fontSize: 12,
     lineHeight: 18,
+  },
+  exampleBox: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  exampleLabel: {
+    color: '#999',
+    fontSize: 12,
+    marginBottom: 5,
+  },
+  exampleText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  copyText: {
+    color: '#007AFF',
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   successContainer: {
     flex: 1,

@@ -1,0 +1,50 @@
+# ── Node / React ─────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp/
+.pnp.js
+build/
+dist/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ── ONNX / Model checkpoints ──────────────────────────────────────────────────
+# Uncomment to ignore large model files (add to Git LFS instead)
+# model/checkpoints/*.onnx
+# model/checkpoints/*.pth
+# model/checkpoints/*.onnx.data
+
+# ── Environment / Secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# ── Arduino build artifacts ───────────────────────────────────────────────────
+build/
+*.elf
+*.bin
+*.map
+
+# ── Dataset (large files — add to Git LFS if needed) ─────────────────────────
+model/data/

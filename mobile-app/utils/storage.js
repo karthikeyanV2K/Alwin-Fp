@@ -48,6 +48,7 @@ export const clearServerIp = async () => {
  * Build full API URL from server IP
  */
 export const getApiUrl = (serverIp, endpoint = '') => {
-  const baseUrl = `http://${serverIp}`;
+  const host = serverIp.includes(':') ? serverIp : `${serverIp}:8000`;
+  const baseUrl = `http://${host}`;
   return endpoint ? `${baseUrl}${endpoint}` : baseUrl;
 };
