@@ -123,6 +123,12 @@ def main(args):
     # ── Model ────────────────────────────────────────────────────────────────
     num_classes = len(detected_classes)
     model = build_model(num_classes, pretrained=(not args.no_pretrain))
+    
+    if args.resume and os.path.exists(args.resume):
+        print(f"[INFO] Resuming from {args.resume}")
+        checkpoint = torch.load(args.resume, map_location="cpu")
+        model.load_state_dict(checkpoint["model_state_dict"])
+        
     model = model.to(device)
     print(f"[INFO] Model: MobileViT-S | Classes: {num_classes} | Params: "
           f"{sum(p.numel() for p in model.parameters()) / 1e6:.2f}M")
@@ -197,5 +203,6 @@ if __name__ == "__main__":
     parser.add_argument("--workers",    type=int,   default=4)
     parser.add_argument("--no_pretrain", action="store_true",
                         help="Train from scratch (not recommended)")
+    parser.add_argument("--resume", type=str, default="", help="Path to checkpoint to resume from")
     args = parser.parse_args()
     main(args)

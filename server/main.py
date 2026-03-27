@@ -50,7 +50,7 @@ from esp32_client import ESP32Client
 # ── Config ────────────────────────────────────────────────────────────────────
 ESP32_IP   = os.getenv("ESP32_IP",   "192.168.29.129")
 MODEL_PATH = os.getenv("MODEL_PATH",
-    str(Path(__file__).parent.parent / "model" / "checkpoints" / "mobilevit_appliance.onnx"))
+    str(Path(__file__).parent.parent / "model" / "checkpoints" / "mobilevit_v2.onnx"))
 
 # ── Globals ───────────────────────────────────────────────────────────────────
 app         = FastAPI(title="Appliance Vision Server", version="1.0.0")

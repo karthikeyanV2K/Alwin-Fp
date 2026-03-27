@@ -52,9 +52,10 @@ export default function ConfigScreen({ onConfigured }) {
     try {
       const host = normalizeServerHost(ip);
       const url = `http://${host}/health`;
-      const response = await axios.get(url, { timeout: 3000 });
+      const response = await axios.get(url, { timeout: 10000 });
       return response.status === 200;
     } catch (error) {
+      console.error('Connection test error for', ip, ':', error.message);
       return false;
     }
   };
