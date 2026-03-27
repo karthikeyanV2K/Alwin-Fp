@@ -1,296 +1,329 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useStream } from './hooks/useStream';
 
-// ── Appliance metadata ────────────────────────────────────────────────────────
-const APPLIANCES = [
-  { name: 'TV',    icon: '📺', pin: 4  },
-  { name: 'Fan',   icon: '🌀', pin: 5  },
-  { name: 'AC',    icon: '❄️', pin: 18 },
-  { name: 'Light', icon: '💡', pin: 19 },
-  { name: 'Plug',  icon: '🔌', pin: 21 },
-];
+// ── PWA Install Banner ────────────────────────────────────────────────────────
+function InstallBanner() {
+  const [prompt, setPrompt] = useState(null);
+  const [ios,    setIos]    = useState(false);
+  const [shown,  setShown]  = useState(false);
 
-const SERVER_DEFAULT = 'ws://localhost:8000/stream';
-const MAX_LOGS = 30;
+  useEffect(() => {
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.navigator.standalone === true;
+    if (isIos && !isStandalone) { setIos(true); setShown(true); }
 
-function timeNow() {
-  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const handler = e => { e.preventDefault(); setPrompt(e); setShown(true); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  if (!shown) return null;
+
+  const install = async () => {
+    if (!prompt) return;
+    await prompt.prompt();
+    setShown(false);
+  };
+
+  return (
+    <div className="install-banner">
+      <span className="install-icon">📲</span>
+      <span className="install-text">
+        {ios
+          ? 'Install: tap Share → Add to Home Screen'
+          : 'Install as an app on your phone'}
+      </span>
+      {!ios && <button className="install-btn" onClick={install}>Install</button>}
+      <button className="install-close" onClick={() => setShown(false)}>✕</button>
+    </div>
+  );
 }
 
-// ── Confirm Modal ─────────────────────────────────────────────────────────────
+// ── Config ────────────────────────────────────────────────────────────────────
+const APPLIANCES = [
+  { name: 'Light', icon: '💡', color: '#f59e0b' },
+  { name: 'Plug',  icon: '🔌', color: '#10b981' },
+  { name: 'TV',    icon: '📺', color: '#3b82f6' },
+  { name: 'Fan',   icon: '🌀', color: '#06b6d4' },
+  { name: 'AC',    icon: '❄️', color: '#8b5cf6' },
+];
+const META = Object.fromEntries(APPLIANCES.map(a => [a.name, a]));
+const SERVER_DEFAULT = 'ws://localhost:8000/stream';
+const MAX_LOGS = 40;
+const ts = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+// ── Confirmation Modal ────────────────────────────────────────────────────────
 function ConfirmModal({ appliance, onConfirm, onReject }) {
-  const meta = APPLIANCES.find(a => a.name === appliance) || { icon: '🔌' };
+  const m = META[appliance] || { icon: '🔌', color: '#7c3aed' };
   return (
     <div className="modal-overlay">
-      <div className="modal">
-        <div className="modal-icon">{meta.icon}</div>
-        <h2>Appliance Detected!</h2>
-        <p>The AI vision system has identified:</p>
-        <span className="modal-appliance">{appliance}</span>
-        <p>Turn it <strong>ON</strong>?</p>
-        <div className="modal-actions" style={{ marginTop: 28 }}>
-          <button className="btn btn-danger"  onClick={onReject}  style={{ flex: 1 }}>✕ No</button>
-          <button className="btn btn-success" onClick={onConfirm} style={{ flex: 1 }}>✓ Yes, Turn ON</button>
+      <div className="modal-card">
+        <div className="modal-glow" style={{ background: m.color }} />
+        <div className="modal-icon" style={{ color: m.color }}>{m.icon}</div>
+        <h2 className="modal-title">Appliance Detected</h2>
+        <div className="modal-name" style={{ color: m.color }}>{appliance}</div>
+        <p className="modal-sub">AI vision system confirmed this appliance.<br/>Turn it <strong>ON</strong>?</p>
+        <div className="modal-btns">
+          <button className="mbtn mbtn-no"  onClick={onReject}>✕ Skip</button>
+          <button className="mbtn mbtn-yes" style={{ background: m.color }} onClick={onConfirm}>✓ Turn ON</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Appliance List ────────────────────────────────────────────────────────────
-function ApplianceList({ states, onToggle }) {
+// ── Device Card ───────────────────────────────────────────────────────────────
+function DeviceCard({ app, isOn, onToggle, isDetecting }) {
+  const m = META[app.name] || app;
   return (
-    <div className="appliance-list">
-      {APPLIANCES.map(a => {
-        const isOn = states[a.name] === 'ON';
-        return (
-          <div key={a.name} className={`appliance-item ${isOn ? 'on' : ''}`}>
-            <div className="appliance-icon">{a.icon}</div>
-            <div className="appliance-info">
-              <div className="appliance-name">{a.name}</div>
-              <div className="appliance-state">{isOn ? '● ON' : '○ Standby'}</div>
-            </div>
-            <button
-              className={`toggle-pill ${isOn ? 'on-pill' : 'off'}`}
-              onClick={() => onToggle(a.name, isOn ? 'OFF' : 'ON')}
-            >
-              {isOn ? 'ON' : 'OFF'}
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Log Panel ────────────────────────────────────────────────────────────────
-function LogPanel({ logs }) {
-  return (
-    <div className="log-list">
-      {logs.length === 0 && (
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', marginTop: 16 }}>
-          No events yet…
-        </div>
-      )}
-      {[...logs].reverse().map((l, i) => (
-        <div key={i} className={`log-entry ${l.type}`}>
-          <div className="log-time">{l.time}</div>
-          {l.msg}
-        </div>
-      ))}
+    <div className={`device-card ${isOn ? 'device-on' : ''} ${isDetecting ? 'device-detecting' : ''}`}
+         style={{ '--accent': m.color }}>
+      <div className="device-icon">{m.icon}</div>
+      <div className="device-name">{m.name}</div>
+      <div className={`device-badge ${isOn ? 'badge-on' : 'badge-off'}`}>
+        {isOn ? '● ON' : '○ OFF'}
+      </div>
+      <div className="device-btns">
+        <button className="dbtn dbtn-on"  onClick={() => onToggle(m.name, 'ON')}  disabled={isOn}>ON</button>
+        <button className="dbtn dbtn-off" onClick={() => onToggle(m.name, 'OFF')} disabled={!isOn}>OFF</button>
+      </div>
+      {isDetecting && <div className="device-detect-ring" />}
     </div>
   );
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [serverUrl,  setServerUrl]  = useState(SERVER_DEFAULT);
-  const [urlInput,   setUrlInput]   = useState(SERVER_DEFAULT);
-  const [logs,       setLogs]       = useState([]);
-  const [status,     setStatus]     = useState(null);    // {label, confidence, fill}
-  const [confirm,    setConfirm]    = useState(null);    // pending appliance name
-  const [devices,    setDevices]    = useState(
+  const [serverUrl, setServerUrl]   = useState(SERVER_DEFAULT);
+  const [urlInput,  setUrlInput]    = useState(SERVER_DEFAULT);
+  const [logs,      setLogs]        = useState([]);
+  const [status,    setStatus]      = useState(null);
+  const [confirm,   setConfirm]     = useState(null);
+  const [detecting, setDetecting]   = useState(null); // appliance being detected
+  const [devices,   setDevices]     = useState(
     Object.fromEntries(APPLIANCES.map(a => [a.name, 'OFF']))
   );
   const [camStarted, setCamStarted] = useState(false);
+  const [espIp,      setEspIp]      = useState('192.168.29.129');
+  const logRef = useRef(null);
 
-  const addLog = useCallback(({ type, msg }) => {
-    setLogs(prev => [...prev.slice(-(MAX_LOGS - 1)), { type, msg, time: timeNow() }]);
+  const addLog = useCallback(({ type, msg }) =>
+    setLogs(p => [...p.slice(-(MAX_LOGS - 1)), { type, msg, time: ts() }]), []);
+
+  const handleStatus = useCallback(s => {
+    setStatus(s);
+    if (s.label !== 'Other') setDetecting(s.label);
+    else setDetecting(null);
   }, []);
 
-  const handleStatus  = useCallback(s  => setStatus(s), []);
-  const handleConfirm = useCallback(c  => {
+  const handleConfirm = useCallback(c => {
     setConfirm(c.appliance);
     addLog({ type: 'confirm', msg: `🔍 Detected: ${c.appliance}` });
   }, [addLog]);
-  const handleResult  = useCallback(r  => {
+
+  const handleResult = useCallback(r => {
     if (r.rejected) {
-      addLog({ type: 'error', msg: '✕ Rejected by user' });
+      addLog({ type: 'warn', msg: '↩ Detection skipped' });
     } else if (r.ok) {
-      setDevices(prev => ({ ...prev, [r.appliance]: r.state }));
+      setDevices(p => ({ ...p, [r.appliance]: r.state }));
       addLog({ type: 'success', msg: `✓ ${r.appliance} turned ${r.state}` });
     } else {
-      addLog({ type: 'error', msg: `ESP32 error for ${r.appliance}` });
+      addLog({ type: 'error', msg: `✗ ESP32 error for ${r.appliance}` });
     }
   }, [addLog]);
 
-  const { videoRef, connected, streaming, connect, startCamera, stopCamera,
-    startStreaming, stopStreaming, sendConfirm, sendReject } = useStream({
-    serverUrl, onStatus: handleStatus, onConfirm: handleConfirm,
-    onResult: handleResult, onLog: addLog,
+  const { videoRef, connected, streaming, connect,
+          startCamera, stopCamera, startStreaming, stopStreaming,
+          sendConfirm, sendReject } = useStream({
+    serverUrl, onStatus: handleStatus,
+    onConfirm: handleConfirm, onResult: handleResult, onLog: addLog,
   });
 
-  const handleStartAll = useCallback(async () => {
+  // Auto-scroll log
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logs]);
+
+  const handleStart = useCallback(async () => {
     await connect();
-    const cameraStarted = await startCamera();
-    if (!cameraStarted) {
-      return;
-    }
+    const ok = await startCamera();
+    if (!ok) return;
     setCamStarted(true);
     await startStreaming();
-  }, [connect, startCamera, startStreaming]);
+    addLog({ type: 'success', msg: '▶ Detection started' });
+  }, [connect, startCamera, startStreaming, addLog]);
 
   const handleStop = useCallback(() => {
     stopStreaming(); stopCamera();
-    setCamStarted(false); setStatus(null);
-  }, [stopStreaming, stopCamera]);
+    setCamStarted(false); setStatus(null); setDetecting(null);
+    addLog({ type: 'warn', msg: '■ Detection stopped' });
+  }, [stopStreaming, stopCamera, addLog]);
 
-  const handleConfirmYes = () => {
-    sendConfirm(confirm);
-    setConfirm(null);
-  };
-  const handleConfirmNo = () => {
-    sendReject();
-    setConfirm(null);
-  };
+  const handleConfirmYes = () => { sendConfirm(confirm); setConfirm(null); };
+  const handleConfirmNo  = () => { sendReject(); setConfirm(null); };
 
-  // Manual toggle (bypasses camera)
+  // Manual toggle → calls FastAPI which calls ESP32
   const handleManualToggle = useCallback(async (device, state) => {
     try {
-      const res = await fetch('/control', {
+      const res = await fetch(`http://localhost:8000/control`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ device, state }),
       });
       if (res.ok) {
-        setDevices(prev => ({ ...prev, [device]: state }));
+        setDevices(p => ({ ...p, [device]: state }));
         addLog({ type: 'success', msg: `Manual: ${device} → ${state}` });
+      } else {
+        addLog({ type: 'error', msg: `Server error for ${device}` });
       }
     } catch {
-      addLog({ type: 'error', msg: 'Server unreachable for manual toggle' });
+      addLog({ type: 'error', msg: 'Cannot reach server' });
     }
   }, [addLog]);
 
-  const isStreaming = streaming && camStarted;
+  const isLive = streaming && camStarted;
+  const confPct = status ? Math.round((status.confidence || 0) * 100) : 0;
+  const fillPct = status ? Math.round((status.fill || 0) * 100) : 0;
 
   return (
-    <div className="app-wrapper">
-      {/* ── Navbar ─────────────────────────────────────────────────── */}
-      <nav className="navbar">
-        <div className="navbar-logo">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="#a78bfa" strokeWidth="1.5"/>
-            <path d="M8 12l3 3 5-5" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round"/>
-            <circle cx="12" cy="12" r="3" fill="#7c3aed" opacity="0.4"/>
-          </svg>
+    <div className="app">
+      <InstallBanner />
+      {/* ── NAVBAR ── */}
+      <nav className="nav">
+        <div className="nav-brand">
+          <span className="nav-dot" />
           Vision Smart Control
         </div>
-        <div className="navbar-status">
-          <div className={`dot ${connected ? 'connected' : streaming ? 'error' : ''}`} />
-          {connected ? 'Server Connected' : 'Disconnected'}
-          &nbsp;&nbsp;|&nbsp;&nbsp;
-          <div className={`dot ${isStreaming ? 'connected' : ''}`} />
-          {isStreaming ? 'Streaming' : 'Idle'}
+        <div className="nav-right">
+          <div className={`status-pill ${connected ? 's-connected' : 's-off'}`}>
+            <span />{connected ? 'Server' : 'Offline'}
+          </div>
+          <div className={`status-pill ${isLive ? 's-live' : 's-off'}`}>
+            <span />{isLive ? 'Live' : 'Idle'}
+          </div>
         </div>
       </nav>
 
-      {/* ── Main ───────────────────────────────────────────────────── */}
-      <div className="main-content">
+      <div className="layout">
 
-        {/* ── Left: Device List ──────────────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="card">
-            <div className="card-title">
-              <span>🏠</span> Devices
-            </div>
-            <ApplianceList states={devices} onToggle={handleManualToggle} />
-          </div>
-
-          {/* Server config */}
-          <div className="card">
-            <div className="card-title"><span>⚙️</span> Server</div>
-            <div className="config-form">
-              <input
-                className="config-input"
-                value={urlInput}
-                onChange={e => setUrlInput(e.target.value)}
-                placeholder="ws://host:8000/stream"
+        {/* ── LEFT: Devices ── */}
+        <aside className="sidebar-left">
+          <p className="section-label">Connected Devices</p>
+          <div className="device-grid">
+            {APPLIANCES.map(a => (
+              <DeviceCard
+                key={a.name}
+                app={a}
+                isOn={devices[a.name] === 'ON'}
+                onToggle={handleManualToggle}
+                isDetecting={detecting === a.name}
               />
-              <button
-                className="btn btn-secondary"
-                style={{ fontSize: '0.8rem', padding: '7px 12px' }}
-                onClick={() => { setServerUrl(urlInput); addLog({ type: 'success', msg: `Server URL updated` }); }}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Center: Camera ─────────────────────────────────────── */}
-        <div className="camera-panel">
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div className="video-wrapper">
-              <video ref={videoRef} playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              {isStreaming && (
-                <div className="video-overlay">
-                  <div className="video-badge">
-                    <span>●</span> LIVE
-                  </div>
-                </div>
-              )}
-              <div className={`scan-ring ${isStreaming ? 'active' : ''}`} />
-            </div>
+            ))}
           </div>
 
-          {/* Current prediction */}
-          <div className="card">
-            <div className="card-title"><span>🤖</span> AI Prediction</div>
-            {status ? (
+          {/* ESP32 IP */}
+          <p className="section-label" style={{ marginTop: 20 }}>ESP32 Direct</p>
+          <div className="esp-row">
+            <input
+              className="esp-input"
+              value={espIp}
+              onChange={e => setEspIp(e.target.value)}
+              placeholder="192.168.x.x"
+            />
+            <a className="esp-open" href={`http://${espIp}`} target="_blank" rel="noreferrer">
+              Open ↗
+            </a>
+          </div>
+        </aside>
+
+        {/* ── CENTER: Camera + Detection ── */}
+        <main className="camera-area">
+          {/* Camera view */}
+          <div className="cam-wrapper">
+            <video ref={videoRef} playsInline muted className="cam-video" />
+            {!isLive && (
+              <div className="cam-placeholder">
+                <div className="cam-ph-icon">📷</div>
+                <p>Camera not started</p>
+              </div>
+            )}
+            {isLive && (
               <>
-                <div className="prediction-row">
-                  <span className={`prediction-label ${status.label === 'Other' ? 'prediction-other' : ''}`}>
-                    {status.label === 'Other' ? '– No appliance' : status.label}
-                  </span>
-                  <span className="prediction-conf">
-                    {(status.confidence * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <div className="fill-bar-wrapper" style={{ marginTop: 12 }}>
-                  <div className="fill-bar-label">
-                    <span>Confidence window</span>
-                    <span>{Math.round((status.fill || 0) * 100)}%</span>
-                  </div>
-                  <div className="fill-bar-track">
-                    <div className="fill-bar-fill" style={{ width: `${(status.fill || 0) * 100}%` }} />
-                  </div>
-                </div>
+                <div className="live-badge"><span>●</span> LIVE</div>
+                <div className="scan-corner tl" /><div className="scan-corner tr" />
+                <div className="scan-corner bl" /><div className="scan-corner br" />
               </>
+            )}
+          </div>
+
+          {/* Detection bar */}
+          <div className="detect-bar">
+            <div className="detect-left">
+              <div className="detect-label-row">
+                <span className={`detect-label ${status?.label === 'Other' || !status ? 'label-none' : 'label-active'}`}>
+                  {!status ? '– Waiting' : status.label === 'Other' ? '– No appliance' : `${META[status.label]?.icon || ''} ${status.label}`}
+                </span>
+                {status && status.label !== 'Other' && (
+                  <span className="detect-conf">{confPct}%</span>
+                )}
+              </div>
+              {/* Temporal window fill */}
+              <div className="fill-track">
+                <div className="fill-bar" style={{ width: `${fillPct}%`,
+                  background: fillPct > 69 ? '#10b981' : fillPct > 40 ? '#f59e0b' : '#7c3aed' }} />
+              </div>
+              <div className="fill-labels">
+                <span>Confidence window</span><span>{fillPct}% / 70% threshold</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Camera controls */}
+          <div className="cam-controls">
+            {!camStarted ? (
+              <button className="cam-btn cam-start" onClick={handleStart}>
+                ▶ Start Camera &amp; Detect
+              </button>
             ) : (
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                Start camera to begin detection…
+              <div className="cam-btn-group">
+                {streaming
+                  ? <button className="cam-btn cam-pause" onClick={stopStreaming}>⏸ Pause</button>
+                  : <button className="cam-btn cam-start" onClick={startStreaming}>▶ Resume</button>
+                }
+                <button className="cam-btn cam-stop" onClick={handleStop}>■ Stop</button>
               </div>
             )}
           </div>
 
-          {/* Controls */}
-          <div className="cam-controls">
-            {!camStarted ? (
-              <button className="btn btn-primary" onClick={handleStartAll} style={{ flex: 1 }}>
-                ▶ Start Camera & Stream
-              </button>
-            ) : (
-              <>
-                {streaming
-                  ? <button className="btn btn-secondary" onClick={stopStreaming}>⏸ Pause</button>
-                  : <button className="btn btn-primary"   onClick={startStreaming}>▶ Resume</button>
-                }
-                <button className="btn btn-danger" onClick={handleStop}>■ Stop</button>
-              </>
-            )}
+          {/* Server URL */}
+          <div className="server-row">
+            <span className="server-label">WebSocket</span>
+            <input className="server-input" value={urlInput} onChange={e => setUrlInput(e.target.value)} />
+            <button className="server-apply" onClick={() => {
+              setServerUrl(urlInput);
+              addLog({ type: 'success', msg: 'Server URL updated' });
+            }}>Apply</button>
           </div>
-        </div>
+        </main>
 
-        {/* ── Right: Event Log ────────────────────────────────────── */}
-        <div className="sidebar-right">
-          <div className="card" style={{ height: '100%' }}>
-            <div className="card-title"><span>📋</span> Event Log</div>
-            <LogPanel logs={logs} />
+        {/* ── RIGHT: Event Log ── */}
+        <aside className="sidebar-right">
+          <p className="section-label">Event Log</p>
+          <div className="log-box" ref={logRef}>
+            {logs.length === 0 && (
+              <div className="log-empty">No events yet…</div>
+            )}
+            {[...logs].reverse().map((l, i) => (
+              <div key={i} className={`log-row log-${l.type}`}>
+                <span className="log-time">{l.time}</span>
+                <span>{l.msg}</span>
+              </div>
+            ))}
           </div>
-        </div>
+        </aside>
       </div>
 
-      {/* ── Confirm Modal ──────────────────────────────────────────── */}
+      {/* ── CONFIRM MODAL ── */}
       {confirm && (
         <ConfirmModal
           appliance={confirm}

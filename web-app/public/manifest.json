@@ -1,0 +1,33 @@
+{
+  "short_name": "SmartControl",
+  "name": "Vision Smart Control",
+  "description": "AI-powered appliance detection and relay control via camera",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080812",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Open Camera",
+      "short_name": "Camera",
+      "description": "Start camera detection",
+      "url": "/?start=camera"
+    }
+  ]
+}
