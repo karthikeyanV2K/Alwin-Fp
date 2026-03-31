@@ -76,4 +76,129 @@ To get the application up and running on your local machine, check out our compr
    * Attach your relay outputs according to the map in `config.h` (or similar definition file).
 
 ---
+
+## 💡 Multi-Room Bulb Detection
+
+This system supports **multiple identical-looking bulbs** in different rooms. Since all bulbs look the same to the camera, room context is used to route the correct relay.
+
+### How It Works
+
+```
+📱 Pick "Bedroom"
+    ↓
+📷 Camera streams frames + room="Bedroom"
+    ↓
+🖥️  Server detects "Light" → maps to "Light_Bedroom"
+    ↓
+✅  Confirm popup appears
+    ↓
+⚡  ESP32 GPIO 19 → Bedroom relay clicks ON
+```
+
+| Fixed Camera approach | Mobile Camera approach (this system) |
+|---|---|
+| Bulb 1 always at frame X=0.1–0.3 | You pick the room first |
+| Bulb 2 always at frame X=0.4–0.6 | ML detects "Light" |
+| Requires zone calibration | Server maps room → relay. No spatial calibration! ✅ |
+
+---
+
+### 📍 Setting the ESP32 IP
+
+There are **2 separate IPs** in this system:
+
+```
+Mobile App ──→ FastAPI Server   ← entered in the app's Config screen
+FastAPI Server ──→ ESP32        ← set in server/main.py
+```
+
+Open `server/main.py` line 51 and change the IP:
+
+```python
+# ── Config ──────────────────────────────────────────────────────
+ESP32_IP = os.getenv("ESP32_IP", "192.168.29.129")  # ← Change this!
+```
+
+Or set it as an environment variable (no code change needed):
+
+```powershell
+$env:ESP32_IP = "192.168.1.50"
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+> [!IMPORTANT]
+> Restart the server after changing the ESP32 IP.
+
+---
+
+### ⚡ Room → Relay Pin Map
+
+Each room's bulb is wired to a dedicated ESP32 relay channel:
+
+```c
+// esp32/main/config.h
+#define PIN_LIGHT_BEDROOM  19   // GPIO19 → IN1 → Bedroom bulb
+#define PIN_LIGHT_LIVING   18   // GPIO18 → IN2 → Living room bulb
+#define PIN_LIGHT_KITCHEN  23   // GPIO23 → IN3 → Kitchen bulb
+#define PIN_PLUG           21   // GPIO21 → IN4 → Power plug
+```
+
+Server routing (`server/main.py`):
+
+```python
+ROOM_TO_DEVICE = {
+    "Bedroom":     "Light_Bedroom",
+    "Living Room": "Light_Living",
+    "Kitchen":     "Light_Kitchen",
+}
+```
+
+---
+
+### 🔦 Calibration Guide
+
+Calibration for this system has two parts:
+
+#### A) Model Calibration — does it detect your bulbs?
+
+Take a photo of your bulb and test the `/detect` endpoint:
+
+```powershell
+cd server
+curl -X POST "http://localhost:8000/detect" -F "file=@bulb_photo.jpg"
+# Expected: {"class": "Light", "confidence": 0.85}
+```
+
+> [!TIP]
+> If confidence is below 0.6, retrain the model with photos of your specific bulbs.
+
+#### B) Room-Relay Calibration — is each wire in the right room?
+
+1. Open `http://<ESP32_IP>` in your browser
+2. Click **Scan Hardware** → then **Open Controls**
+3. Toggle each relay individually
+4. Verify which physical bulb switches ON/OFF
+5. If wires are swapped, update the pin numbers in `config.h` and re-flash
+
+---
+
+### 🚀 Quick Test
+
+```bash
+# 1. Start server (with correct ESP32 IP)
+cd server
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+# 2. Start mobile app
+cd mobile-app
+npm start
+```
+
+Then on your phone:
+1. Enter your server IP on the Config screen
+2. Select a room (Bedroom / Living Room / Kitchen)
+3. Point camera at that room's bulb
+4. Tap **"Turn ON"** on the confirm popup → relay clicks! ⚡
+
+---
 <p align="center">Made with ❤️ for Vision-Driven Homes</p>

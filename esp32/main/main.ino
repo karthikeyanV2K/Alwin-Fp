@@ -24,15 +24,19 @@
 
 WiFiMulti wifiMulti;
 
-// ── Pin table ────────────────────────────────────────────────────────────────
+// ── Pin table ─────────────────────────────────────────────────────────────────
+// Each room's bulb has its own relay channel.
+// Device names MUST match what the server sends (e.g. "Light_Bedroom").
 struct DevicePin { const char* name; int pin; };
 const DevicePin DEVICES[] = {
-  {"Light", PIN_LIGHT},   // GPIO19 → IN1
-  {"Plug",  PIN_PLUG },   // GPIO21 → IN2
+  {"Light_Bedroom", PIN_LIGHT_BEDROOM},  // GPIO19 → IN1 → Bedroom bulb
+  {"Light_Living",  PIN_LIGHT_LIVING },  // GPIO18 → IN2 → Living room bulb
+  {"Light_Kitchen", PIN_LIGHT_KITCHEN},  // GPIO23 → IN3 → Kitchen bulb
+  {"Plug",          PIN_PLUG         },  // GPIO21 → IN4 → Power plug
 };
 const int NUM_DEVICES = sizeof(DEVICES) / sizeof(DEVICES[0]);
 
-bool deviceState[2] = { false, false };
+bool deviceState[4] = { false, false, false, false };
 
 WebServer server(HTTP_PORT);
 
