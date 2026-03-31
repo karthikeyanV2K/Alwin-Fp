@@ -139,7 +139,7 @@ Each room's bulb is wired to a dedicated ESP32 relay channel:
 // esp32/main/config.h
 #define PIN_LIGHT_BEDROOM  19   // GPIO19 → IN1 → Bedroom bulb
 #define PIN_LIGHT_LIVING   18   // GPIO18 → IN2 → Living room bulb
-#define PIN_LIGHT_KITCHEN  23   // GPIO23 → IN3 → Kitchen bulb
+#define PIN_LIGHT_KITCHEN  23   // GPIO23 → IN3 → Kitchen bulb // NOT NOW 
 #define PIN_PLUG           21   // GPIO21 → IN4 → Power plug
 ```
 

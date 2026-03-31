@@ -199,6 +199,10 @@ async def stream_endpoint(ws: WebSocket):
 
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        # Ignore keepalive ping timeouts or graceful connection drops
+        if "keepalive ping timeout" not in str(e) and "Close" not in str(e):
+            print(f"[WebSocket] Disconnected: {e}")
     finally:
         _validators.pop(conn_id, None)
 

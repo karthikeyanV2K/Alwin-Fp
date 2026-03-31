@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TouchableOpacity, Text } from 'react-native';
 import CameraScreen from './screens/CameraScreen';
 import ConfigScreen from './screens/ConfigScreen';
 import RoomSelectScreen from './screens/RoomSelectScreen';
@@ -29,6 +30,11 @@ export default function App() {
 
   const handleConfigured = (ip) => {
     setServerIp(ip);
+  };
+
+  const handleClearConfig = async () => {
+    await AsyncStorage.removeItem('SERVER_IP');
+    setServerIp(null);
   };
 
   if (isLoading) {
@@ -65,12 +71,17 @@ export default function App() {
             {/* ── Step 2: Pick room ── */}
             <Stack.Screen
               name="RoomSelectScreen"
-              options={{
+              options={({ navigation }) => ({
                 title: 'Select Room',
                 headerStyle: { backgroundColor: '#080812' },
                 headerTintColor: '#a78bfa',
                 headerTitleStyle: { fontWeight: '800', fontSize: 18 },
-              }}
+                headerRight: () => (
+                  <TouchableOpacity onPress={handleClearConfig} style={{ marginRight: 10, padding: 5 }}>
+                    <Text style={{ color: '#f59e0b', fontSize: 14, fontWeight: '700' }}>Change IP</Text>
+                  </TouchableOpacity>
+                ),
+              })}
             >
               {(props) => (
                 <RoomSelectScreen {...props} serverIp={serverIp} />

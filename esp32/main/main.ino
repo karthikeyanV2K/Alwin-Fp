@@ -29,10 +29,10 @@ WiFiMulti wifiMulti;
 // Device names MUST match what the server sends (e.g. "Light_Bedroom").
 struct DevicePin { const char* name; int pin; };
 const DevicePin DEVICES[] = {
-  {"Light_Bedroom", PIN_LIGHT_BEDROOM},  // GPIO19 → IN1 → Bedroom bulb
-  {"Light_Living",  PIN_LIGHT_LIVING },  // GPIO18 → IN2 → Living room bulb
+  {"Yellow", PIN_LIGHT_BEDROOM},  // GPIO19 → IN1 → Bedroom bulb
+  {"White",  PIN_LIGHT_LIVING },  // GPIO18 → IN2 → Living room bulb
   {"Light_Kitchen", PIN_LIGHT_KITCHEN},  // GPIO23 → IN3 → Kitchen bulb
-  {"Plug",          PIN_PLUG         },  // GPIO21 → IN4 → Power plug
+  {"Blue",          PIN_PLUG         },  // GPIO21 → IN4 → Power plug
 };
 const int NUM_DEVICES = sizeof(DEVICES) / sizeof(DEVICES[0]);
 
