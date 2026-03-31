@@ -6,8 +6,11 @@
 #pragma once
 
 // ── WiFi ───────────────────────────────────────────────────────────────────
-#define WIFI_SSID     "Sweethome"
-#define WIFI_PASSWORD "sweethome@2026"
+#define WIFI_SSID_1     "Sweethome"
+#define WIFI_PASSWORD_1 "sweethome@2026"
+
+#define WIFI_SSID_2     "Backup_WiFi"       // Change this to your 2nd WiFi SSID
+#define WIFI_PASSWORD_2 "backup_password"   // Change this to your 2nd WiFi Password
 
 // ── GPIO Pin Map (label → GPIO number) ────────────────────────────────────
 //   Relay modules are typically ACTIVE-LOW: HIGH = off, LOW = on.

@@ -16,10 +16,13 @@
  */
 
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <ArduinoJson.h>
 #include "config.h"
+
+WiFiMulti wifiMulti;
 
 // ── Pin table ────────────────────────────────────────────────────────────────
 struct DevicePin { const char* name; int pin; };
@@ -356,18 +359,26 @@ void setup() {
     setDevice(i, false);
   }
 
-  Serial.printf("\n[WiFi] Connecting to: %s\n", WIFI_SSID);
+  Serial.println("\n[WiFi] Connecting to WiFi...");
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+  // Register multiple networks. It will try to connect to the strongest one available.
+  wifiMulti.addAP(WIFI_SSID_1, WIFI_PASSWORD_1);
+  wifiMulti.addAP(WIFI_SSID_2, WIFI_PASSWORD_2);
+  // wifiMulti.addAP("SSID_3", "PASSWORD_3"); // You can add even more here if needed
+  
   int attempt = 0;
-  while (WiFi.status() != WL_CONNECTED && attempt < 30) {
+  while (wifiMulti.run() != WL_CONNECTED && attempt < 30) {
     delay(500); Serial.print("."); attempt++;
   }
+  
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("\n[ERROR] WiFi failed - restarting in 5s");
     delay(5000); ESP.restart();
   }
-  Serial.printf("\n[WiFi] Connected. IP: %s\n", WiFi.localIP().toString().c_str());
+  
+  Serial.printf("\n[WiFi] Connected to: %s\n", WiFi.SSID().c_str());
+  Serial.printf("[WiFi] IP Address: %s\n", WiFi.localIP().toString().c_str());
 
   if (MDNS.begin("smart-control")) {
     Serial.println("[mDNS] Registered: smart-control.local");
