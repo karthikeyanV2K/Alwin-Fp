@@ -138,7 +138,13 @@ export default function RoomSelectScreen({ navigation, serverIp, route }) {
       
       if (data.status === 'success') {
         const idx = ROOMS.findIndex(r => r.id === data.room);
-        if (idx !== -1) handleSelect(ROOMS[idx], idx);
+        if (idx !== -1) {
+          handleSelect(ROOMS[idx], idx);
+          // Auto-proceed after a brief delay so the user sees the selection
+          setTimeout(() => {
+            navigation.navigate('CameraScreen', { room: data.room, serverIp: resolvedIp });
+          }, 1200);
+        }
       }
     } catch (e) {
       console.warn('Auto detect failed:', e);
